@@ -1,6 +1,6 @@
 #/bin/bash
 
-# The script expects that log files are in the futuretense commons-logging format. This means that the log message starts at the 43rd byte per line.
+# The script expects that log files are in the futuretense commons-logging format. This means that the log message starts at the 74rd byte per line.
 # If you have other logger implementations (like log4j) you may want to change the log file before using it as input for this tool.
 # In most cases this means that you will need to use sed to change the log file.
 
@@ -10,25 +10,29 @@
 
 # filename to use
 filename=futuretense.txt.gz
+loggername='\[fatwire\.logging\.cs\.time\]'
+
 
 # use egrep with extented regex
 egrep=egrep
 
 
-# All the time debug logfinfo into one big file.
-zcat $filename | grep '\[CS\.TIME\]' | grep Executed | cut -b 43- > execute_all.txt
+# All the time debug log info into one big file.
+# grep for the logger name and then cut line before loggername follozd by a space, as indicator for when the message starts.
+zcat $filename | grep "$loggername" | sed "s/^.*$loggername //" | gzip > time-log.gz
+zcat time-log.gz | grep Executed > execute_all.txt
 
 # Calculate the execution time of pages
-zcat $filename | grep '\[CS\.TIME\]' | grep 'Execute page' | cut -b 56- | awk 'BEGIN {FS="[ :]"};{print $1,$4*3600000+$7*60000+$10*1000+$11 }' > execute_page.txt
+zcat time-log.gz | grep 'Execute page' | cut -b 14- | awk 'BEGIN {FS="[ :]"};{print $1,$4*3600000+$7*60000+$10*1000+$11 }' > execute_page.txt
 
 # Calculate the execution time of elements
-zcat $filename | grep '\[CS\.TIME\]' | grep 'Executed element' | awk '{print $5,$7}' | sed 's/ms\.$//' > execute_elements.txt
+zcat time-log.gz | grep 'Executed element'| awk '{print $3,$5}' | sed 's/ms\.$//' > execute_elements.txt
 
 # Split the timings into seperate files with different brackets
-zcat $filename | grep '\[CS\.TIME\]' | $egrep ' [[:digit:]]{1,2}ms'| cut -b 43- > execute_10ms.txt
-zcat $filename | grep '\[CS\.TIME\]' | $egrep ' [[:digit:]]{3}ms'  | cut -b 43- > execute_100ms.txt
-zcat $filename | grep '\[CS\.TIME\]' | $egrep ' [[:digit:]]{4}ms'  | cut -b 43- > execute_1s.txt
-zcat $filename | grep '\[CS\.TIME\]' | $egrep ' [[:digit:]]{5,}ms' | cut -b 43- > execute_10s.txt
+zcat time-log.gz | $egrep ' [[:digit:]]{1,2}ms' > execute_10ms.txt
+zcat time-log.gz | $egrep ' [[:digit:]]{3}ms'   > execute_100ms.txt
+zcat time-log.gz | $egrep ' [[:digit:]]{4}ms'   > execute_1s.txt
+zcat time-log.gz | $egrep ' [[:digit:]]{5,}ms'  > execute_10s.txt
 
 # Report the number of types (query, element, inline) for the bracket 100ms to 999ms.
 cat execute_100ms.txt | awk '$1 ~ /Executed/ {print $2}' | sort | uniq -c > execute_100ms_type_count.txt
@@ -71,3 +75,4 @@ cat execute_elements.txt | egrep ' [[:digit:]]{4}$'   | awk '{print $1}' | sort 
 cat execute_elements.txt | egrep ' [[:digit:]]{5,}$'  | awk '{print $1}' | sort | uniq -c | sort -n -k 1 > execute_elements_10s_dist.txt
 
 #rm -f execute_all.txt
+
